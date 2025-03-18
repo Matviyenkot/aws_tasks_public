@@ -2,12 +2,12 @@ package com.task04;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
+import com.amazonaws.services.lambda.runtime.events.SQSEvent;
 import com.syndicate.deployment.annotations.events.SqsTriggerEventSource;
 import com.syndicate.deployment.annotations.lambda.LambdaHandler;
 import com.syndicate.deployment.model.RetentionSetting;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @LambdaHandler(
@@ -22,18 +22,22 @@ import java.util.Map;
 		targetQueue = "async_queue",
 		batchSize = 10
 )
-public class SqsHandler implements RequestHandler<List<Map<String, Object>>, Map<String, Object>> {
+public class SqsHandler implements RequestHandler<SQSEvent, Map<String, Object>> {
 
 	@Override
-	public Map<String, Object> handleRequest(List<Map<String, Object>> messages, Context context) {
+	public Map<String, Object> handleRequest(SQSEvent event, Context context) {
 		Map<String, Object> resultMap = new HashMap<>();
-
-		for (Map<String, Object> message : messages) {
-			context.getLogger().log("Received SQS message: " + message.get("body"));
+		if (event.getRecords().isEmpty()) {
+			context.getLogger().log("No messages received.");
+			resultMap.put("statusCode", 204);
+			resultMap.put("body", "No messages to process.");
+			return resultMap;
 		}
-
+		for (SQSEvent.SQSMessage message : event.getRecords()) {
+			context.getLogger().log("Received SQS message: " + message.getBody());
+		}
 		resultMap.put("statusCode", 200);
-		resultMap.put("body", "Processed " + messages.size() + " messages.");
+		resultMap.put("body", "Processed " + event.getRecords().size() + " messages.");
 		return resultMap;
 	}
 }
