@@ -19,7 +19,9 @@
             "dynamodb:Query",
             "dynamodb:PutItem",
             "dynamodb:Batch*",
-            "dynamodb:DeleteItem"
+            "dynamodb:DeleteItem",
+            "dynamodb:Scan",
+            "dynamodb:UpdateItem"
           ],
           "Effect": "Allow",
           "Resource": "*"
@@ -55,7 +57,7 @@
     "dependencies": [],
     "resources": {
       "/events": {
-        "enable_cors": false,
+        "path_part": "events",
         "POST": {
           "authorization_type": "NONE",
           "integration_type": "lambda",
@@ -66,7 +68,8 @@
           "responses": [],
           "integration_responses": [],
           "default_error_pattern": true,
-          "enable_proxy": true
+          "enable_proxy": true,
+          "lambda_integration_type": "request_response"
         }
       }
     },
