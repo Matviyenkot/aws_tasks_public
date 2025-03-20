@@ -21,7 +21,8 @@
             "dynamodb:Batch*",
             "dynamodb:DeleteItem",
             "dynamodb:Scan",
-            "dynamodb:UpdateItem"
+            "dynamodb:UpdateItem",
+            "cloudwatch:ListMetrics"
           ],
           "Effect": "Allow",
           "Resource": "*"

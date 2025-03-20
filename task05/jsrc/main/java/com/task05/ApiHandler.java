@@ -86,9 +86,13 @@ public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPRespon
 			responseBody.put("createdAt", createdAt);
 			responseBody.put("body", content);
 
+			Map<String, Object> responseMap = new HashMap<>();
+			responseMap.put("statusCode", 201);
+			responseMap.put("event", responseBody);
+
 			APIGatewayV2HTTPResponse response = new APIGatewayV2HTTPResponse();
 			response.setStatusCode(201);
-			response.setBody(objectMapper.writeValueAsString(Map.of("event", responseBody)));
+			response.setBody(objectMapper.writeValueAsString(Map.of("event", responseMap)));
 			response.setHeaders(Map.of("Content-Type", "application/json"));
 
 			return response;
@@ -96,7 +100,7 @@ public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPRespon
 			logger.log("Error in processing request: " + e.getMessage());
 			return APIGatewayV2HTTPResponse.builder()
 					.withStatusCode(500)
-					.withBody("{\"message\": \"Internal server error\"}")
+					.withBody("{\"message\": \"My Internal server error\"}")
 					.withHeaders(Map.of("Content-Type", "application/json"))
 					.build();
 		}
