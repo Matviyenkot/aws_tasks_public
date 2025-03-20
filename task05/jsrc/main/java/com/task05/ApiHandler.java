@@ -114,7 +114,7 @@ public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPRespon
 		responseMap.put("event", body);
 		return APIGatewayV2HTTPResponse.builder()
 				.withStatusCode(statusCode)
-				.withBody(objectMapper.writeValueAsString(Map.of("event", responseMap)))
+				.withBody(objectMapper.writeValueAsString(responseMap))
 				.withHeaders(Map.of("Content-Type", "application/json"))
 				.build();
 	}
