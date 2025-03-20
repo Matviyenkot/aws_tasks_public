@@ -1,11 +1,5 @@
 package com.task05;
 
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
-import com.amazonaws.services.dynamodbv2.document.Item;
-import com.amazonaws.services.dynamodbv2.document.ItemUtils;
-import com.amazonaws.services.dynamodbv2.model.PutItemRequest;
-import com.amazonaws.services.dynamodbv2.model.PutItemResult;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
@@ -20,6 +14,9 @@ import com.syndicate.deployment.model.ResourceType;
 import com.syndicate.deployment.model.RetentionSetting;
 import com.syndicate.deployment.model.lambda.url.AuthType;
 import com.syndicate.deployment.model.lambda.url.InvokeMode;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 
 
 import java.time.Instant;
@@ -27,6 +24,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @LambdaHandler(
 		lambdaName = "api_handler",
@@ -45,41 +43,53 @@ import java.util.UUID;
 		@EnvironmentVariable(key = "table", value = "${target_table}")})
 public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPResponse> {
 	private static final ObjectMapper objectMapper = new ObjectMapper();
-	private static final AmazonDynamoDB dynamoDB = AmazonDynamoDBClientBuilder.defaultClient();
+	private static final DynamoDbClient dynamoDB = DynamoDbClient.create();
 
 	@Override
 	public APIGatewayV2HTTPResponse handleRequest(Object event, Context context) {
 		LambdaLogger logger = context.getLogger();
 		try {
 			logger.log("Received event: " + event.toString());
-			logger.log("Lambda logger EVENT: " + objectMapper.writeValueAsString(event));
-			logger.log("EVENT TYPE: " + event.getClass());
-			// Parse input from APIGatewayV2
+
 			Map<String, Object> input = objectMapper.readValue(objectMapper.writeValueAsString(event), LinkedHashMap.class);
 
-			// Parse input
-			Integer principalId = (Integer) input.get("principalId");
+			// Парсимо principalId
+			Object principalIdObj = input.get("principalId");
+			Integer principalId;
+			if (principalIdObj instanceof Number) {
+				principalId = ((Number) principalIdObj).intValue();
+			} else {
+				principalId = Integer.parseInt(principalIdObj.toString());
+			}
+
 			Map<String, String> content = (Map<String, String>) input.get("content");
 
-			// Generate UUID
+			// Генеруємо ID та час створення
 			String eventId = UUID.randomUUID().toString();
 			String createdAt = Instant.now().toString();
 
-			// Prepare item for DynamoDB
-			Item item = new Item();
-			item.withString("id", eventId);
-			item.withInt("principalId", principalId);
-			item.withString("createdAt", createdAt);
-			item.withMap("body", content);
+			// Формуємо запис для DynamoDB
+			Map<String, AttributeValue> itemMap = new HashMap<>();
+			itemMap.put("id", AttributeValue.builder().s(eventId).build());
+			itemMap.put("principalId", AttributeValue.builder().n(String.valueOf(principalId)).build());
+			itemMap.put("createdAt", AttributeValue.builder().s(createdAt).build());
+			itemMap.put("body", AttributeValue.builder().m(
+					content.entrySet().stream()
+							.collect(Collectors.toMap(
+									Map.Entry::getKey,
+									e -> AttributeValue.builder().s(e.getValue()).build()
+							))
+			).build());
 
+			// Записуємо в DynamoDB
+			PutItemRequest putItemRequest = PutItemRequest.builder()
+					.tableName(System.getenv("table"))
+					.item(itemMap)
+					.build();
 
-			// Save item to DynamoDB
-			PutItemRequest putItemRequest = new PutItemRequest().withTableName(System.getenv("table")).withItem(ItemUtils.toAttributeValues(item));
-			PutItemResult putItemResult = dynamoDB.putItem(putItemRequest);
+			dynamoDB.putItem(putItemRequest);
 
-			logger.log("putItemResult:" + putItemResult.toString());
-
-			// Prepare response
+			// Формуємо відповідь
 			Map<String, Object> responseBody = new HashMap<>();
 			responseBody.put("id", eventId);
 			responseBody.put("principalId", principalId);
@@ -90,12 +100,11 @@ public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPRespon
 			responseMap.put("statusCode", 201);
 			responseMap.put("event", responseBody);
 
-			APIGatewayV2HTTPResponse response = new APIGatewayV2HTTPResponse();
-			response.setStatusCode(201);
-			response.setBody(objectMapper.writeValueAsString(Map.of("event", responseMap)));
-			response.setHeaders(Map.of("Content-Type", "application/json"));
-
-			return response;
+			return APIGatewayV2HTTPResponse.builder()
+					.withStatusCode(201)
+					.withBody(objectMapper.writeValueAsString(responseMap))
+					.withHeaders(Map.of("Content-Type", "application/json"))
+					.build();
 		} catch (Exception e) {
 			logger.log("Error in processing request: " + e.getMessage());
 			return APIGatewayV2HTTPResponse.builder()
@@ -106,3 +115,4 @@ public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPRespon
 		}
 	}
 }
+
