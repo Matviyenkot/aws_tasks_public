@@ -4,6 +4,7 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.syndicate.deployment.annotations.environment.EnvironmentVariable;
 import com.syndicate.deployment.annotations.environment.EnvironmentVariables;
@@ -49,20 +50,34 @@ public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPRespon
 	public APIGatewayV2HTTPResponse handleRequest(Object event, Context context) {
 		LambdaLogger logger = context.getLogger();
 		try {
-			logger.log("Received event: " + event.toString());
+			logger.log("Received event: " + objectMapper.writeValueAsString(event));
 
-			Map<String, Object> input = objectMapper.readValue(objectMapper.writeValueAsString(event), LinkedHashMap.class);
+			// Парсимо загальний об'єкт
+			Map<String, Object> data = objectMapper.convertValue(event, LinkedHashMap.class);
 
-			// Парсимо principalId
-			Object principalIdObj = input.get("principalId");
-			Integer principalId;
-			if (principalIdObj instanceof Number) {
-				principalId = ((Number) principalIdObj).intValue();
-			} else {
-				principalId = Integer.parseInt(principalIdObj.toString());
+			// Отримуємо body (це рядок JSON)
+			String bodyString = (String) data.get("body");
+			if (bodyString == null || bodyString.isEmpty()) {
+				return createErrorResponse(400, "Request body is missing");
 			}
 
-			Map<String, String> content = (Map<String, String>) input.get("content");
+			// Парсимо body в Map
+			Map<String, Object> body = objectMapper.readValue(bodyString, LinkedHashMap.class);
+
+			// Отримуємо principalId
+			Object principalIdObj = body.get("principalId");
+			if (principalIdObj == null) {
+				return createErrorResponse(400, "Missing required field: principalId");
+			}
+			Integer principalId = (principalIdObj instanceof Number)
+					? ((Number) principalIdObj).intValue()
+					: Integer.parseInt(principalIdObj.toString());
+
+			// Отримуємо content
+			Map<String, Object> content = (Map<String, Object>) body.get("content");
+			if (content == null) {
+				return createErrorResponse(400, "Missing required field: content");
+			}
 
 			// Генеруємо ID та час створення
 			String eventId = UUID.randomUUID().toString();
@@ -77,16 +92,15 @@ public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPRespon
 					content.entrySet().stream()
 							.collect(Collectors.toMap(
 									Map.Entry::getKey,
-									e -> AttributeValue.builder().s(e.getValue()).build()
+									e -> AttributeValue.builder().s(String.valueOf(e.getValue())).build()
 							))
 			).build());
 
-			// Записуємо в DynamoDB
+			// Запис у DynamoDB
 			PutItemRequest putItemRequest = PutItemRequest.builder()
 					.tableName(System.getenv("table"))
 					.item(itemMap)
 					.build();
-
 			dynamoDB.putItem(putItemRequest);
 
 			// Формуємо відповідь
@@ -96,23 +110,29 @@ public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPRespon
 			responseBody.put("createdAt", createdAt);
 			responseBody.put("body", content);
 
-			Map<String, Object> responseMap = new HashMap<>();
-			responseMap.put("statusCode", 201);
-			responseMap.put("event", responseBody);
-
-			return APIGatewayV2HTTPResponse.builder()
-					.withStatusCode(201)
-					.withBody(objectMapper.writeValueAsString(responseMap))
-					.withHeaders(Map.of("Content-Type", "application/json"))
-					.build();
+			return createSuccessResponse(201, responseBody);
 		} catch (Exception e) {
 			logger.log("Error in processing request: " + e.getMessage());
-			return APIGatewayV2HTTPResponse.builder()
-					.withStatusCode(500)
-					.withBody("{\"message\": \"My Internal server error\"}")
-					.withHeaders(Map.of("Content-Type", "application/json"))
-					.build();
+			return createErrorResponse(500, "Internal Server Error");
 		}
+	}
+
+	// Метод для створення успішної відповіді
+	private APIGatewayV2HTTPResponse createSuccessResponse(int statusCode, Map<String, Object> body) throws JsonProcessingException {
+		return APIGatewayV2HTTPResponse.builder()
+				.withStatusCode(statusCode)
+				.withBody(objectMapper.writeValueAsString(Map.of("event", body)))
+				.withHeaders(Map.of("Content-Type", "application/json"))
+				.build();
+	}
+
+	// Метод для створення помилкової відповіді
+	private APIGatewayV2HTTPResponse createErrorResponse(int statusCode, String message) {
+		return APIGatewayV2HTTPResponse.builder()
+				.withStatusCode(statusCode)
+				.withBody("{\"error\": \"" + message + "\"}")
+				.withHeaders(Map.of("Content-Type", "application/json"))
+				.build();
 	}
 }
 
