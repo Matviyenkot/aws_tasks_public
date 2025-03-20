@@ -52,19 +52,15 @@ public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPRespon
 		try {
 			logger.log("Received event: " + objectMapper.writeValueAsString(event));
 
-			// Парсимо загальний об'єкт
 			Map<String, Object> data = objectMapper.convertValue(event, LinkedHashMap.class);
 
-			// Отримуємо body (це рядок JSON)
 			String bodyString = (String) data.get("body");
 			if (bodyString == null || bodyString.isEmpty()) {
 				return createErrorResponse(400, "Request body is missing");
 			}
 
-			// Парсимо body в Map
 			Map<String, Object> body = objectMapper.readValue(bodyString, LinkedHashMap.class);
 
-			// Отримуємо principalId
 			Object principalIdObj = body.get("principalId");
 			if (principalIdObj == null) {
 				return createErrorResponse(400, "Missing required field: principalId");
@@ -73,17 +69,14 @@ public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPRespon
 					? ((Number) principalIdObj).intValue()
 					: Integer.parseInt(principalIdObj.toString());
 
-			// Отримуємо content
 			Map<String, Object> content = (Map<String, Object>) body.get("content");
 			if (content == null) {
 				return createErrorResponse(400, "Missing required field: content");
 			}
 
-			// Генеруємо ID та час створення
 			String eventId = UUID.randomUUID().toString();
 			String createdAt = Instant.now().toString();
 
-			// Формуємо запис для DynamoDB
 			Map<String, AttributeValue> itemMap = new HashMap<>();
 			itemMap.put("id", AttributeValue.builder().s(eventId).build());
 			itemMap.put("principalId", AttributeValue.builder().n(String.valueOf(principalId)).build());
@@ -96,14 +89,12 @@ public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPRespon
 							))
 			).build());
 
-			// Запис у DynamoDB
 			PutItemRequest putItemRequest = PutItemRequest.builder()
 					.tableName(System.getenv("table"))
 					.item(itemMap)
 					.build();
 			dynamoDB.putItem(putItemRequest);
 
-			// Формуємо відповідь
 			Map<String, Object> responseBody = new HashMap<>();
 			responseBody.put("id", eventId);
 			responseBody.put("principalId", principalId);
@@ -117,7 +108,6 @@ public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPRespon
 		}
 	}
 
-	// Метод для створення успішної відповіді
 	private APIGatewayV2HTTPResponse createSuccessResponse(int statusCode, Map<String, Object> body) throws JsonProcessingException {
 		return APIGatewayV2HTTPResponse.builder()
 				.withStatusCode(statusCode)
@@ -126,7 +116,6 @@ public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPRespon
 				.build();
 	}
 
-	// Метод для створення помилкової відповіді
 	private APIGatewayV2HTTPResponse createErrorResponse(int statusCode, String message) {
 		return APIGatewayV2HTTPResponse.builder()
 				.withStatusCode(statusCode)
