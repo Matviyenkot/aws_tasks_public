@@ -109,9 +109,12 @@ public class ApiHandler implements RequestHandler<Object, APIGatewayV2HTTPRespon
 	}
 
 	private APIGatewayV2HTTPResponse createSuccessResponse(int statusCode, Map<String, Object> body) throws JsonProcessingException {
+		Map<String, Object> responseMap = new HashMap<>();
+		responseMap.put("statusCode", 201);
+		responseMap.put("event", body);
 		return APIGatewayV2HTTPResponse.builder()
 				.withStatusCode(statusCode)
-				.withBody(objectMapper.writeValueAsString(Map.of("event", body)))
+				.withBody(objectMapper.writeValueAsString(Map.of("event", responseMap)))
 				.withHeaders(Map.of("Content-Type", "application/json"))
 				.build();
 	}
