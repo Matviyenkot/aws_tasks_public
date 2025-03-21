@@ -31,7 +31,7 @@ import java.util.UUID;
 public class AuditProducer implements RequestHandler<DynamodbEvent, Void> {
 
 	private static final DynamoDbClient dynamoDB = DynamoDbClient.create();
-	private static final String AUDIT_TABLE_NAME = System.getenv("audit_table");
+	private static final String AUDIT_TABLE_NAME = System.getenv("Audit");
 
 	@Override
 	public Void handleRequest(DynamodbEvent event, Context context) {
