@@ -71,6 +71,10 @@ public class AuditProducer implements RequestHandler<DynamodbEvent, Void> {
 				auditItem.put("newValue", software.amazon.awssdk.services.dynamodb.model.AttributeValue.builder().m(newValueMap).build());
 
 			} else if ("MODIFY".equals(record.getEventName()) && newImage != null && oldImage != null) {
+				auditItem.put("updatedAttribute", software.amazon.awssdk.services.dynamodb.model.AttributeValue.builder()
+						.s("value") // Поле, яке оновилося
+						.build());
+
 				auditItem.put("newValue", software.amazon.awssdk.services.dynamodb.model.AttributeValue.builder()
 						.n(newImage.get("value").getN())
 						.build());
