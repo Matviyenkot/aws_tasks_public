@@ -4,6 +4,8 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.DynamodbEvent;
 import com.amazonaws.services.lambda.runtime.events.models.dynamodb.StreamRecord;
+import com.syndicate.deployment.annotations.environment.EnvironmentVariable;
+import com.syndicate.deployment.annotations.environment.EnvironmentVariables;
 import com.syndicate.deployment.annotations.events.DynamoDbTriggerEventSource;
 import com.syndicate.deployment.annotations.lambda.LambdaHandler;
 import com.syndicate.deployment.model.RetentionSetting;
@@ -28,10 +30,13 @@ import java.util.UUID;
 		targetTable = "Configuration",
 		batchSize = 1
 )
+@EnvironmentVariables(value = {
+		@EnvironmentVariable(key = "region", value = "${region}"),
+		@EnvironmentVariable(key = "table", value = "${target_table}")})
 public class AuditProducer implements RequestHandler<DynamodbEvent, Void> {
 
 	private static final DynamoDbClient dynamoDB = DynamoDbClient.create();
-	private static final String AUDIT_TABLE_NAME = System.getenv("Audit");
+	private static final String AUDIT_TABLE_NAME = System.getenv("table");
 
 	@Override
 	public Void handleRequest(DynamodbEvent event, Context context) {
@@ -59,9 +64,12 @@ public class AuditProducer implements RequestHandler<DynamodbEvent, Void> {
 			auditItem.put("modificationTime", software.amazon.awssdk.services.dynamodb.model.AttributeValue.builder().s(modificationTime).build());
 
 			if ("INSERT".equals(record.getEventName()) && newImage != null) {
-				auditItem.put("newValue", software.amazon.awssdk.services.dynamodb.model.AttributeValue.builder()
-						.m(convertToSdkMap(newImage))
-						.build());
+				Map<String, software.amazon.awssdk.services.dynamodb.model.AttributeValue> newValueMap = new HashMap<>();
+				newValueMap.put("key", software.amazon.awssdk.services.dynamodb.model.AttributeValue.builder().s(itemKey).build());
+				newValueMap.put("value", software.amazon.awssdk.services.dynamodb.model.AttributeValue.builder().n(newImage.get("value").getN()).build());
+
+				auditItem.put("newValue", software.amazon.awssdk.services.dynamodb.model.AttributeValue.builder().m(newValueMap).build());
+
 			} else if ("MODIFY".equals(record.getEventName()) && newImage != null && oldImage != null) {
 				auditItem.put("newValue", software.amazon.awssdk.services.dynamodb.model.AttributeValue.builder()
 						.n(newImage.get("value").getN())
